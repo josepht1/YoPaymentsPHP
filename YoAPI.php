@@ -18,6 +18,12 @@ class YoAPI {
 	private $password;
 
     /**
+     * Set this to true if you are using the Sandbox system.
+     * @var boolean
+     */
+    private $test_mode;
+
+    /**
      * The Non Blocking Request variable
      * Optional.
      * Whether the connection to the Yo! Payments Gateway is maintained until your request is 
@@ -127,14 +133,27 @@ class YoAPI {
 
     /**
      * YoAPI constructor.
-     * @param string $username
-     * @param string $password
+     * @param string    $username
+     * @param string    $password
+     * @param boolean   $tes_mode: If set to true, it will use sandbox.
      */
-    public function __construct($username, $password)
+    public function __construct($username, $password, $test_mode=false)
     {
         $this->username = $username;
         $this->password = $password;
+        $this->tes_mode = $test_mode;
     }
+
+    public function get_url()
+    {
+        if ($this->test_mode) {
+            return "https://41.220.12.206/services/yopaymentsdev/task.php";
+        } else {
+            return "https://paymentsapi1.yo.co.ug/ybs/task.php";
+        }
+    }
+
+
 
     /**
 	* Set the API Username
@@ -328,7 +347,19 @@ class YoAPI {
     * @param string $msisdn the mobile money phone number in the format 256772123456
     * @param double $amount the amount of money to deposit into your account (floats are supported)
     * @param string $narrative the reason for the mobile money user to deposit funds 
-    * @return array
+    * @return 
+    *   $result['Status']: This is Yo! Request Status. Can be set to OK|ERROR.;
+        $result['StatusCode']: This is Yo! Payments status code. See API for more;
+        $result['StatusMessage']: This is Yo! Payment status message. Can be displayed to user.
+        $result['TransactionStatus']: This is Yo! Payments Transaction related status. See API.
+        $result['ErrorMessageCode']: This is Yo! Payments Error message code. See API for more.
+        $result['TransactionReference']: This is Yo! Payments unique transaction reference.
+        $result['MNOTransactionReferenceId']: This is Network reference. See API for more.
+        $result['IssuedReceiptNumber']: The issued receipt number if any.
+        $result['ErrorMessage']: Any sort of error that may happen to your request.
+        $result['SentData']: Sent XML data. You can use this for troubleshooting.
+        $result['ResponseData']: Response data. Might be set to empty string depending to the request.
+        $result['HttpResponseCode']: The http status response code for the request. Might be empty.
     */
     public function ac_deposit_funds($msisdn, $amount, $narrative)
     {
@@ -352,9 +383,27 @@ class YoAPI {
     	$xml .= '</Request>';
     	$xml .= '</AutoCreate>';
 
-		$xml_response = $this->get_xml_response($xml);
+		$xml_response = $this->get_xml_response_2($xml);
 
-		$simpleXMLObject =  new SimpleXMLElement($xml_response);
+        try{
+            $simpleXMLObject =  new SimpleXMLElement($xml_response['data']);
+        } catch(Exception $ex) {
+            //If there was an error
+            $result['Status'] = "";
+            $result['StatusCode'] = "";
+            $result['StatusMessage'] = "";
+            $result['TransactionStatus'] = "";
+            $result['ErrorMessageCode'] = "";
+            $result['TransactionReference'] = "";
+            $result['MNOTransactionReferenceId'] = "";
+            $result['IssuedReceiptNumber'] = "";
+            $result['ErrorMessage'] = $xml_response['error'];
+            $result['SentData'] = $xml;
+            $result['ResponseData'] = $xml_response['data'];
+            $result['HttpResponseCode'] = $xml_response['http_status_code'];
+            return $result;
+        }
+		
         $response = $simpleXMLObject->Response;
 
 		$result = array();
@@ -362,6 +411,10 @@ class YoAPI {
 		$result['StatusCode'] = (string) $response->StatusCode;
 		$result['StatusMessage'] = (string) $response->StatusMessage;
 		$result['TransactionStatus'] = (string) $response->TransactionStatus;
+        $result['SentData'] = $xml;
+        $result['ResponseData'] = $xml_response['data'];
+        $result['HttpResponseCode'] = $xml_response['http_status_code'];
+
 		if (!empty($response->ErrorMessageCode)) {
 			$result['ErrorMessageCode'] = (string) $response->ErrorMessageCode;
 		}
@@ -379,7 +432,6 @@ class YoAPI {
 		}
 
 		return $result;
-    	
     }
 
     /**
@@ -955,6 +1007,44 @@ class YoAPI {
         curl_close($soap_do);
 
         return $xml_response;
+    }
+
+
+    /*
+    * get_xml_response_2 Makes Network request using curl lib.
+    * r
+    * @Param $xml   String: The actual XML payload to include in HTTP request.
+    * 
+    * Returns 
+        array['data']: Response data.
+        array['error']: Any Error message if any.
+        array['http_status_code']: Any HTTP status code if any data.
+    * 
+    *
+    */
+    protected function get_xml_response_2($xml)
+    {
+        $soap_do = curl_init();
+        curl_setopt($soap_do, CURLOPT_URL, $this->get_url());
+        curl_setopt($soap_do, CURLOPT_CONNECTTIMEOUT, 120);
+        curl_setopt($soap_do, CURLOPT_TIMEOUT, 120);
+        curl_setopt($soap_do, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($soap_do, CURLOPT_POST, true);
+        curl_setopt($soap_do, CURLOPT_POSTFIELDS, $xml);
+        curl_setopt($soap_do, CURLOPT_SSL_VERIFYPEER, 0);
+        curl_setopt($soap_do, CURLOPT_SSL_VERIFYHOST, 0);
+        curl_setopt($soap_do, CURLOPT_VERBOSE, false);
+        curl_setopt($soap_do, CURLOPT_HTTPHEADER, array('Content-Type: text/xml','Content-transfer-encoding: text','Content-Length: '.strlen($xml)));
+
+        $xml_response = curl_exec($soap_do);
+        $error = curl_error($soap_do);
+        $info = curl_getinfo($soap_do);
+        
+        $return_['data'] = $xml_response;
+        $return_['error'] = empty($error ) ? "" : $error;
+        $return_['http_status_code'] = empty($info['http_code']) ? "" : $info['http_code'];
+        curl_close($soap_do);
+        return $return_;
     }
 
     protected function verify_payment_notification()
