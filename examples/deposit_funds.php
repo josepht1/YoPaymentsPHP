@@ -4,18 +4,20 @@
  * prompt to transfer funds from a mobile money user to your Yo! Payments Account
  */
 
-require './YoAPI.php';
+require '../YoAPI.php';
 
 // Create a new YoAPI instance with Yo! Payments Username and Password
+$username = "";
+$password = "";
+$test_mode = true;
 
-
-$yoAPI = new YoAPI($username, $password); 
+$yoAPI = new YoAPI($username, $password, $test_mode); 
 
 // Create a unique transaction reference that you will reference this payment with
 $transaction_reference = date("YmdHis").rand(1,100);
 $yoAPI->set_external_reference($transaction_reference);
 
-$response = $yoAPI->ac_deposit_funds('256770000000', 1000, 'Reason for transfer of funds');
+$response = $yoAPI->ac_deposit_funds('256783086794', 1000, 'Reason for transfer of funds');
 
 //See what data type response has:
 echo "<pre>";
@@ -34,7 +36,7 @@ if($response['Status']=='OK'){
 	echo "Request failed, Error message: ".$response['ErrorMessage']." \n";
 	echo "Reponse HTTP code: ".$response['HttpResponseCode']." \n"; 
 
-	//You can also examine the Sent and response data like so.
+	//You can also examine the sent and response data like so.
 	//echo "Sent XML: ".$response['SentData']." \n"; 
 	//echo "Response XML: ".$response['ResponseData']." \n"; 
 

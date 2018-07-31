@@ -141,10 +141,16 @@ class YoAPI {
     {
         $this->username = $username;
         $this->password = $password;
-        $this->tes_mode = $test_mode;
+        $this->test_mode = $test_mode;
     }
 
-    public function get_url()
+
+    /*
+    * set_yopayment_url sets the URL according to 
+    * the initialized mode.
+    * 
+    */
+    public function set_yopayment_url()
     {
         if ($this->test_mode) {
             return "https://41.220.12.206/services/yopaymentsdev/task.php";
@@ -360,6 +366,7 @@ class YoAPI {
         $result['SentData']: Sent XML data. You can use this for troubleshooting.
         $result['ResponseData']: Response data. Might be set to empty string depending to the request.
         $result['HttpResponseCode']: The http status response code for the request. Might be empty.
+        $result['SentToUrl']: URL to which request were submitted.
     */
     public function ac_deposit_funds($msisdn, $amount, $narrative)
     {
@@ -401,6 +408,7 @@ class YoAPI {
             $result['SentData'] = $xml;
             $result['ResponseData'] = $xml_response['data'];
             $result['HttpResponseCode'] = $xml_response['http_status_code'];
+            $result['SentToUrl'] = $this->set_yopayment_url();
             return $result;
         }
 		
@@ -414,6 +422,7 @@ class YoAPI {
         $result['SentData'] = $xml;
         $result['ResponseData'] = $xml_response['data'];
         $result['HttpResponseCode'] = $xml_response['http_status_code'];
+        $result['SentToUrl'] = $this->set_yopayment_url();
 
 		if (!empty($response->ErrorMessageCode)) {
 			$result['ErrorMessageCode'] = (string) $response->ErrorMessageCode;
@@ -1025,14 +1034,19 @@ class YoAPI {
     protected function get_xml_response_2($xml)
     {
         $soap_do = curl_init();
-        curl_setopt($soap_do, CURLOPT_URL, $this->get_url());
+        curl_setopt($soap_do, CURLOPT_URL, $this->set_yopayment_url());
         curl_setopt($soap_do, CURLOPT_CONNECTTIMEOUT, 120);
         curl_setopt($soap_do, CURLOPT_TIMEOUT, 120);
         curl_setopt($soap_do, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($soap_do, CURLOPT_POST, true);
         curl_setopt($soap_do, CURLOPT_POSTFIELDS, $xml);
-        curl_setopt($soap_do, CURLOPT_SSL_VERIFYPEER, 0);
-        curl_setopt($soap_do, CURLOPT_SSL_VERIFYHOST, 0);
+        if ($this->test_mode) {
+            curl_setopt($soap_do, CURLOPT_SSL_VERIFYPEER, FALSE);
+            curl_setopt($soap_do, CURLOPT_SSL_VERIFYHOST, 0);
+        } else {
+            curl_setopt($soap_do, CURLOPT_SSL_VERIFYPEER, TRUE);
+            curl_setopt($soap_do, CURLOPT_SSL_VERIFYHOST, 2);
+        }
         curl_setopt($soap_do, CURLOPT_VERBOSE, false);
         curl_setopt($soap_do, CURLOPT_HTTPHEADER, array('Content-Type: text/xml','Content-transfer-encoding: text','Content-Length: '.strlen($xml)));
 
